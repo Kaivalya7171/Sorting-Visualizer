@@ -7,6 +7,9 @@ let array = [];
   let timerInterval = null;
   let totalPausedTime = 0;
   let pauseStartTime = 0;
+  let soundEnabled = true;
+  let lastMergeTime = 0;
+  let lastQuickTime = 0;
 
   let audioCtx = null;
   function initAudio() {
@@ -14,7 +17,7 @@ let array = [];
     if (audioCtx.state === 'suspended') audioCtx.resume();
   }
   function playBeep(freq = 200) {
-    if (!audioCtx) return;
+    if (!audioCtx || !soundEnabled) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
@@ -31,6 +34,8 @@ let array = [];
   const sortBtn   = document.getElementById('sort-btn');
   const pauseBtn  = document.getElementById('pause-btn');
   const stopBtn   = document.getElementById('stop-btn');
+  const worstCaseBtn = document.getElementById('worst-case-btn');
+  const soundToggle = document.getElementById('sound-toggle');
   const algoSel   = document.getElementById('algo-select');
   const sizeSlider= document.getElementById('size-slider');
   const speedSlider=document.getElementById('speed-slider');
@@ -142,7 +147,14 @@ let array = [];
     } catch(e) { /* stopped */ }
 
     clearInterval(timerInterval);
-    timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
+    const timeTaken = performance.now() - startTime - totalPausedTime;
+    timeEl.textContent = Math.round(timeTaken) + 'ms';
+
+    if (!stopFlag) {
+      if(algo === 'merge') lastMergeTime = timeTaken;
+      else                 lastQuickTime = timeTaken;
+      updatePerformanceGraph();
+    }
 
     if (!stopFlag) {
       for (let i = 0; i < array.length; i++) {
@@ -170,6 +182,7 @@ let array = [];
   async function mergeSort(l, r, sorted) {
     if (stopFlag) throw 'stop';
     if (l >= r) return;
+    explanation.textContent = "Dividing array into two halves...";
     const m = Math.floor((l + r) / 2);
     await mergeSort(l, m, sorted);
     await mergeSort(m + 1, r, sorted);
@@ -183,7 +196,7 @@ let array = [];
 
     while (i < left.length && j < right.length) {
       if (stopFlag) throw 'stop';
-      explanation.textContent = `Comparing left[${i}] and right[${j}] subarrays...`;
+      explanation.textContent = `Merging sorted subarrays... left[${i}] and right[${j}]`;
       comparisons++;
       steps++; stepsEl.textContent = steps;
       compEl.textContent = comparisons;
@@ -217,6 +230,7 @@ let array = [];
   async function quickSort(l, r, sorted) {
     if (stopFlag) throw 'stop';
     if (l >= r) { sorted.add(l); return; }
+    explanation.textContent = "Choosing pivot...";
     const pi = await partition(l, r, sorted);
     sorted.add(pi);
     await quickSort(l, pi - 1, sorted);
@@ -237,6 +251,7 @@ let array = [];
       await sleep(getDelay());
 
       if (array[j] < pivot) {
+        explanation.textContent = "Placing smaller elements to left...";
         i++;
         [array[i], array[j]] = [array[j], array[i]];
         swaps++; swapsEl.textContent = swaps;
@@ -271,6 +286,53 @@ let array = [];
     }
   });
   stopBtn.addEventListener('click', () => { stopFlag = true; isPaused = false; });
+
+  if(soundToggle) {
+    soundToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      soundToggle.textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+    });
+  }
+
+  if(worstCaseBtn) {
+    worstCaseBtn.addEventListener('click', () => {
+      if (!isSorting && array.length > 0) {
+        array.sort((a,b) => a - b);
+        resetStats();
+        renderBars([], [], [], []);
+        setStatus('Worst Case Generated — (Sorted Ascending makes Quick Sort O(n²))', 'idle');
+      }
+    });
+  }
+
+  const infoTitle = document.getElementById('info-title');
+  const infoList  = document.getElementById('info-list');
+  function updateInfoBox() {
+    if(algoSel.value === 'merge') {
+      infoTitle.textContent = 'Merge Sort';
+      infoList.innerHTML = '<li>Divide & Conquer</li><li>Stable</li><li>Uses extra space</li>';
+    } else {
+      infoTitle.textContent = 'Quick Sort';
+      infoList.innerHTML = '<li>In-place</li><li>Faster in practice</li><li>Worst case O(n²)</li>';
+    }
+  }
+  algoSel.addEventListener('change', updateInfoBox);
+  updateInfoBox();
+
+  function updatePerformanceGraph() {
+    const mergeVal = document.getElementById('perf-merge-val');
+    const mergeBar = document.getElementById('perf-merge-bar');
+    const quickVal = document.getElementById('perf-quick-val');
+    const quickBar = document.getElementById('perf-quick-bar');
+    if(!mergeVal) return;
+    
+    mergeVal.textContent = lastMergeTime > 0 ? Math.round(lastMergeTime) + 'ms' : '—';
+    quickVal.textContent = lastQuickTime > 0 ? Math.round(lastQuickTime) + 'ms' : '—';
+    
+    const maxTime = Math.max(lastMergeTime, lastQuickTime, 10);
+    mergeBar.style.height = lastMergeTime > 0 ? `${(lastMergeTime / maxTime) * 100}%` : '0%';
+    quickBar.style.height = lastQuickTime > 0 ? `${(lastQuickTime / maxTime) * 100}%` : '0%';
+  }
 
   // Init
   generateArray();

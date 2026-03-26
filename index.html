@@ -15,6 +15,7 @@
     <div class="logo-container">
       <div class="logo">Sort<span>Viz</span></div>
       <div class="badge">Visualizer v2.1</div>
+      <button id="sound-toggle" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin-left: 1rem; width: auto; border-radius: 999px;">🔊 Sound: ON</button>
     </div>
   </header>
 
@@ -50,6 +51,7 @@
 
         <div class="button-group">
           <button class="btn btn-secondary" id="gen-btn">Generate Array</button>
+          <button class="btn btn-secondary" id="worst-case-btn">Generate Worst Case</button>
           <div style="display:flex; gap:0.5rem; width:100%;">
             <button class="btn btn-primary" id="sort-btn" style="flex:1;">Start Sorting</button>
             <button class="btn btn-secondary" id="pause-btn" style="flex:1; display:none;">Pause</button>
@@ -76,6 +78,15 @@
           <div class="stat-val" id="time-ms">0ms</div>
           <div class="stat-lbl">Time</div>
         </div>
+      </div>
+
+      <div class="panel" style="padding: 1.25rem;">
+        <h3 id="info-title" style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">Merge Sort</h3>
+        <ul id="info-list" style="font-size: 0.75rem; color: var(--text-secondary); padding-left: 1.2rem; line-height: 1.8; font-family: var(--font-mono);">
+          <li>Divide & Conquer</li>
+          <li>Stable</li>
+          <li>Uses extra space</li>
+        </ul>
       </div>
     </aside>
 
@@ -110,6 +121,22 @@
             <span>Quick: Avg O(n log n), <span style="color:var(--text-primary)">Worst O(n²)</span></span>
           </div>
           <span id="array-info" style="font-family: var(--font-mono); text-align:right;">—</span>
+        </div>
+
+        <div class="performance-graph" id="perf-graph">
+          <div class="perf-title">Performance Comparison (Time taken)</div>
+          <div class="perf-bars">
+            <div class="perf-col">
+              <div class="perf-val" id="perf-merge-val">—</div>
+              <div class="perf-bar-container"><div class="perf-bar merge" id="perf-merge-bar"></div></div>
+              <div class="perf-lbl">Merge</div>
+            </div>
+            <div class="perf-col">
+              <div class="perf-val" id="perf-quick-val">—</div>
+              <div class="perf-bar-container"><div class="perf-bar quick" id="perf-quick-bar"></div></div>
+              <div class="perf-lbl">Quick</div>
+            </div>
+          </div>
         </div>
 
       </div>
