@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sorting Visualizer</title>
+<meta name="description" content="Interactive sorting visualizer for Merge and Quick sort.">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="script.js" defer></script>
+
+  <header>
+    <div class="logo-container">
+      <div class="logo">Sort<span>Viz</span></div>
+      <div class="badge">Visualizer v2.1</div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- ═══ Sidebar / Controls ═══ -->
+    <aside class="sidebar">
+      <div class="panel">
+        
+        <div class="control-group">
+          <label>Algorithm</label>
+          <select id="algo-select">
+            <option value="merge">Merge Sort</option>
+            <option value="quick">Quick Sort</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Array Size</label>
+          <div class="range-wrapper">
+            <input type="range" id="size-slider" min="10" max="100" value="40">
+            <span class="range-value" id="size-val">40</span>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Speed</label>
+          <div class="range-wrapper">
+            <input type="range" id="speed-slider" min="1" max="10" value="5">
+            <span class="range-value" id="speed-val">5</span>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn btn-secondary" id="gen-btn">Generate Array</button>
+          <div style="display:flex; gap:0.5rem; width:100%;">
+            <button class="btn btn-primary" id="sort-btn" style="flex:1;">Start Sorting</button>
+            <button class="btn btn-secondary" id="pause-btn" style="flex:1; display:none;">Pause</button>
+          </div>
+          <button class="btn btn-danger" id="stop-btn">Stop</button>
+        </div>
+
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="steps">0</div>
+          <div class="stat-lbl">Steps</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="comparisons">0</div>
+          <div class="stat-lbl">Comparisons</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="swaps">0</div>
+          <div class="stat-lbl">Swaps</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="time-ms">0ms</div>
+          <div class="stat-lbl">Time</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ Main Content / Visualizer ═══ -->
+    <main class="content">
+      <div class="visualizer-card">
+        
+        <div class="visualizer-header">
+          <div class="status">
+            <div class="status-dot" id="status-dot"></div>
+            <div class="status-msg" id="status-text">Ready — Generate an array to begin</div>
+          </div>
+          
+          <div class="legend">
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-default)"></div> Unsorted</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-active)"></div> Active</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-compare)"></div> Comparing</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-pivot)"></div> Pivot</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-sorted)"></div> Sorted</div>
+          </div>
+        </div>
+
+        <div id="explanation" style="margin-top:0.5rem; margin-bottom:0.5rem; font-size:0.8rem; color:var(--text-secondary); font-family:var(--font-mono); text-align:center; min-height:1.2rem;">
+          Explanation will appear here...
+        </div>
+
+        <div class="bars-wrapper" id="bar-container"></div>
+
+        <div class="footer">
+          <div class="footer-links" style="flex-direction:column; gap:0.25rem;">
+            <span>Merge: O(n log n)</span>
+            <span>Quick: Avg O(n log n), <span style="color:var(--text-primary)">Worst O(n²)</span></span>
+          </div>
+          <span id="array-info" style="font-family: var(--font-mono); text-align:right;">—</span>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+  </body>
