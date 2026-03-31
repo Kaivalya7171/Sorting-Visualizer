@@ -1,91 +1,498 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Expense Organizer — DAA Project</title>
-  <meta name="description" content="Smart Expense Organizer demonstrating Merge Sort and Quick Sort on real expense data.">
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sorting Visualizer</title>
+<meta name="description" content="Interactive sorting visualizer for Merge and Quick sort.">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #000000;
+    --bg-surface: #0a0a0a;
+    --bg-subtle: #111111;
+    --border-subtle: #222222;
+    --border-strong: #333333;
+    
+    --text-primary: #ededed;
+    --text-secondary: #a1a1aa;
+    
+    --bar-default: #333333;
+    --bar-active: #3b82f6;   /* Blue */
+    --bar-compare: #f5a623;  /* Orange/Yellow */
+    --bar-sorted: #10b981;   /* Green */
+    --bar-pivot: #8b5cf6;    /* Purple */
+    
+    --btn-primary-bg: #ededed;
+    --btn-primary-fg: #000000;
+    --btn-primary-hover: #ffffff;
+    
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --font-sans: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: radial-gradient(circle at 20% 20%, #1a1a2e, transparent 40%),
+                radial-gradient(circle at 80% 30%, #16213e, transparent 40%),
+                radial-gradient(circle at 50% 80%, #0f3460, transparent 50%),
+                #000000;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── Typography & Header ── */
+  header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .logo {
+    font-weight: 600;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .logo span { color: var(--text-secondary); font-weight: 400; }
+
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    background: var(--bg-subtle);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* ── Layout ── */
+  .main-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 1.5rem;
+    gap: 1.5rem;
+  }
+
+  /* Desktop layout: Dashboard style */
+  @media (min-width: 900px) {
+    .main-container {
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .sidebar { width: 320px; flex-shrink: 0; }
+    .content { flex: 1; min-width: 0; }
+  }
+
+  /* ── Sidebar / Controls ── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .panel {
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Inputs */
+  select {
+    width: 100%;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23a1a1aa' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  
+  select:hover {
+    border-color: #555;
+    background: #1a1a1a;
+  }
+  select:focus {
+    border-color: var(--text-secondary);
+    outline: none;
+  }
+
+  .range-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 4px;
+    background: var(--border-strong);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.15s ease;
+  }
+  input[type="range"]:hover {
+    background: #444;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+  
+  .range-value {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    min-width: 2.5ch;
+    text-align: right;
+  }
+
+  /* Buttons */
+  .button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+  }
+
+  .btn-primary {
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-fg);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--btn-primary-hover);
+  }
+
+  .btn-secondary {
+    background: var(--bg-subtle);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: #1a1a1a;
+    border-color: #555;
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+    display: none;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  .btn:active:not(:disabled) { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border-strong);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .stat-box {
+    background: var(--bg-surface);
+    padding: 1.25rem 0.5rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .stat-val {
+    font-family: var(--font-mono);
+    font-size: 1.125rem;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .stat-lbl {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Visualizer Content ── */
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .visualizer-card {
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .visualizer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  /* Status */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg-surface);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: all 0.3s ease;
+  }
+  .status-dot.active {
+    background: transparent;
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    border-top-color: var(--bar-active);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    width: 14px; height: 14px;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+  }
+  .status-dot.done { 
+    background: var(--bar-sorted);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); 
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .status-msg {
+    font-size: 0.85rem;
+    color: #fff;
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .legend-color {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+  }
+
+  /* Bars Container */
+  .bars-wrapper {
+    flex: 1;
+    min-height: 400px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 1.5rem 1.5rem 0;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .bar {
+    flex: 1;
+    background: var(--bar-default);
+    border-radius: 2px 2px 0 0;
+    min-width: 2px;
+    transition: height 0.05s ease-out, background-color 0.1s ease;
+    will-change: height, background-color, transform, opacity;
+  }
+
+  /* State classes applied by JS */
+  .bar.active { 
+    background: var(--bar-active); 
+    box-shadow: 0 0 16px var(--bar-active), 0 0 4px #fff;
+    z-index: 10;
+  }
+  .bar.compare { 
+    background: var(--bar-compare); 
+    box-shadow: 0 0 12px var(--bar-compare);
+    z-index: 9;
+  }
+  .bar.sorted { 
+    background: var(--bar-sorted); 
+  }
+  .bar.pivot { 
+    background: var(--bar-pivot); 
+    box-shadow: 0 0 12px var(--bar-pivot);
+    z-index: 11;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-strong);
+  }
+  
+  .footer-links {
+    display: flex;
+    gap: 1rem;
+    font-family: var(--font-mono);
+  }
+
+  /* Mobile responsiveness enhancements */
+  @media (max-width: 640px) {
+    .bars-wrapper { min-height: 250px; padding: 1rem 1rem 0; }
+    .button-group { flex-direction: row; flex-wrap: wrap; }
+    .btn { flex: 1; min-width: calc(50% - 0.5rem); }
+    .btn-danger { min-width: 100%; }
+    .stats-grid { border-radius: var(--radius-sm); }
+    .visualizer-card { padding: 1rem; }
+  }
+</style>
 </head>
 <body>
 
-  <!-- ── Header ── -->
   <header>
     <div class="logo-container">
-      <div class="logo">Expense<span>Sorter</span></div>
-      <div class="badge">DAA Project</div>
-    </div>
-    <div class="header-right">
-      <div class="badge badge-algo" id="header-algo-badge">Merge Sort</div>
-      <button id="step-toggle" class="btn btn-sm btn-secondary">
-        <span class="step-icon">👁</span> Step-by-Step: <span id="step-label">ON</span>
-      </button>
+      <div class="logo">Sort<span>Viz</span></div>
+      <div class="badge">Visualizer v2.1</div>
     </div>
   </header>
 
   <div class="main-container">
-
-    <!-- ══ Sidebar ══ -->
+    
+    <!-- ═══ Sidebar / Controls ═══ -->
     <aside class="sidebar">
-
-      <!-- Input -->
       <div class="panel">
-        <div class="panel-title">📥 Input Expenses</div>
-
-        <div class="control-group">
-          <label>Add Expense</label>
-          <div class="input-row">
-            <input type="text"   id="inp-category" placeholder="Category (e.g. Food)" maxlength="20" autocomplete="off">
-            <input type="number" id="inp-amount"   placeholder="Amount" min="1" max="99999">
-          </div>
-          <button class="btn btn-primary" id="add-btn">+ Add Expense</button>
-        </div>
-
-        <div class="control-group">
-          <label>Or Upload CSV / Excel</label>
-          <label class="file-drop" id="file-drop-area">
-            <span id="file-drop-label">📂 Drop CSV or click to browse</span>
-            <input type="file" id="csv-file" accept=".csv,.xlsx" hidden>
-          </label>
-          <div class="help-text">Upload .csv or .xlsx — columns: Category, Amount</div>
-        </div>
-
-        <div class="control-group">
-          <div class="expense-list-header">
-            <label>Expense List <span id="expense-count" class="count-badge">0</span></label>
-            <button class="btn btn-xs btn-danger-outline" id="clear-all-btn">Clear All</button>
-          </div>
-          <div id="expense-list" class="expense-list">
-            <div class="empty-state">No expenses yet. Add some above!</div>
-          </div>
-        </div>
-
-        <button class="btn btn-secondary" id="sample-btn">📋 Load Sample Expenses</button>
-      </div>
-
-      <!-- Algorithm Controls -->
-      <div class="panel">
-        <div class="panel-title">⚙️ Algorithm Controls</div>
-
+        
         <div class="control-group">
           <label>Algorithm</label>
-          <div class="algo-toggle" id="algo-toggle">
-            <button class="algo-btn active" data-algo="merge">Merge Sort</button>
-            <button class="algo-btn"        data-algo="quick">Quick Sort</button>
+          <select id="algo-select">
+            <option value="merge">Merge Sort</option>
+            <option value="quick">Quick Sort</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Array Size</label>
+          <div class="range-wrapper">
+            <input type="range" id="size-slider" min="10" max="100" value="40">
+            <span class="range-value" id="size-val">40</span>
           </div>
         </div>
 
         <div class="control-group">
-          <label>Direction</label>
-          <div class="algo-toggle" id="dir-toggle">
-            <button class="algo-btn active" data-dir="asc">↑ Asc</button>
-            <button class="algo-btn"        data-dir="desc">↓ Desc</button>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <label>Animation Speed</label>
+          <label>Speed</label>
           <div class="range-wrapper">
             <input type="range" id="speed-slider" min="1" max="10" value="5">
             <span class="range-value" id="speed-val">5</span>
@@ -93,122 +500,352 @@
         </div>
 
         <div class="button-group">
-          <button class="btn btn-primary"   id="sort-btn">▶ Sort Expenses</button>
-          <button class="btn btn-secondary" id="compare-btn">⚡ Compare Algorithms</button>
-          <button class="btn btn-danger"    id="stop-btn" style="display:none;">■ Stop</button>
+          <button class="btn btn-secondary" id="gen-btn">Generate Array</button>
+          <div style="display:flex; gap:0.5rem; width:100%;">
+            <button class="btn btn-primary" id="sort-btn" style="flex:1;">Start Sorting</button>
+            <button class="btn btn-secondary" id="pause-btn" style="flex:1; display:none;">Pause</button>
+          </div>
+          <button class="btn btn-danger" id="stop-btn">Stop</button>
         </div>
+
       </div>
 
-      <!-- Algorithm Info -->
-      <div class="panel algo-info-panel">
-        <div class="panel-title" id="info-title">Merge Sort Info</div>
-        <div id="info-content" class="info-content">
-          <div class="info-row"><span class="info-key">Type</span>   <span class="info-val">Divide &amp; Conquer</span></div>
-          <div class="info-row"><span class="info-key">Stable</span> <span class="info-val">✓ Yes</span></div>
-          <div class="info-row"><span class="info-key">Best</span>   <span class="info-val mono">O(n log n)</span></div>
-          <div class="info-row"><span class="info-key">Average</span><span class="info-val mono">O(n log n)</span></div>
-          <div class="info-row"><span class="info-key">Worst</span>  <span class="info-val mono">O(n log n)</span></div>
-          <div class="info-row"><span class="info-key">Space</span>  <span class="info-val mono">O(n)</span></div>
-        </div>
-      </div>
-
-    </aside>
-
-    <!-- ══ Main Content ══ -->
-    <main class="content">
-
-      <!-- Status -->
-      <div class="status-bar">
-        <div class="status">
-          <div class="status-dot" id="status-dot"></div>
-          <div class="status-msg" id="status-text">Ready — Add expenses and click Sort</div>
-        </div>
-        <div id="step-explanation" class="step-explanation">Step-by-step comparisons will appear here</div>
-      </div>
-
-      <!-- Stats -->
       <div class="stats-grid">
         <div class="stat-box">
-          <div class="stat-val" id="stat-comparisons">0</div>
+          <div class="stat-val" id="steps">0</div>
+          <div class="stat-lbl">Steps</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="comparisons">0</div>
           <div class="stat-lbl">Comparisons</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" id="stat-swaps">0</div>
-          <div class="stat-lbl">Swaps / Moves</div>
+          <div class="stat-val" id="swaps">0</div>
+          <div class="stat-lbl">Swaps</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" id="stat-time">0ms</div>
-          <div class="stat-lbl">Time Taken</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="stat-n">0</div>
-          <div class="stat-lbl">Expenses (n)</div>
+          <div class="stat-val" id="time-ms">0ms</div>
+          <div class="stat-lbl">Time</div>
         </div>
       </div>
+    </aside>
 
-      <!-- Visualization -->
+    <!-- ═══ Main Content / Visualizer ═══ -->
+    <main class="content">
       <div class="visualizer-card">
+        
         <div class="visualizer-header">
-          <div class="viz-title">📊 Expense Visualization</div>
+          <div class="status">
+            <div class="status-dot" id="status-dot"></div>
+            <div class="status-msg" id="status-text">Ready — Generate an array to begin</div>
+          </div>
+          
           <div class="legend">
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-default)"></div>Unsorted</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-active)"></div>Active</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-compare)"></div>Comparing</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-pivot)"></div>Pivot</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-sorted)"></div>Sorted</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-default)"></div> Unsorted</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-active)"></div> Active</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-compare)"></div> Comparing</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-pivot)"></div> Pivot</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-sorted)"></div> Sorted</div>
           </div>
         </div>
-        <div class="bars-wrapper" id="bar-container">
-          <div class="bars-empty-state">Add expenses to visualize sorting</div>
+
+        <div id="explanation" style="margin-top:0.5rem; margin-bottom:0.5rem; font-size:0.8rem; color:var(--text-secondary); font-family:var(--font-mono); text-align:center; min-height:1.2rem;">
+          Explanation will appear here...
         </div>
+
+        <div class="bars-wrapper" id="bar-container"></div>
+
+        <div class="footer">
+          <div class="footer-links" style="flex-direction:column; gap:0.25rem;">
+            <span>Merge: O(n log n)</span>
+            <span>Quick: Avg O(n log n), <span style="color:var(--text-primary)">Worst O(n²)</span></span>
+          </div>
+          <span id="array-info" style="font-family: var(--font-mono); text-align:right;">—</span>
+        </div>
+
       </div>
-
-      <!-- Results / Performance / Insights -->
-      <div class="bottom-grid">
-
-        <div class="panel result-panel">
-          <div class="panel-title">📋 Sorted Results</div>
-          <div id="sorted-results" class="sorted-results">
-            <div class="empty-state">Results will appear after sorting</div>
-          </div>
-        </div>
-
-        <div class="panel perf-panel">
-          <div class="panel-title">⚡ Performance Comparison</div>
-          <div class="perf-bars-section" id="perf-section">
-            <div class="perf-col">
-              <div class="perf-val"  id="perf-merge-val">—</div>
-              <div class="perf-stat" id="perf-merge-cmp">— cmps</div>
-              <div class="perf-bar-outer">
-                <div class="perf-bar merge" id="perf-merge-bar" style="height:0%"></div>
-              </div>
-              <div class="perf-lbl">Merge Sort</div>
-            </div>
-            <div class="perf-col">
-              <div class="perf-val"  id="perf-quick-val">—</div>
-              <div class="perf-stat" id="perf-quick-cmp">— cmps</div>
-              <div class="perf-bar-outer">
-                <div class="perf-bar quick" id="perf-quick-bar" style="height:0%"></div>
-              </div>
-              <div class="perf-lbl">Quick Sort</div>
-            </div>
-          </div>
-          <div class="perf-verdict" id="perf-verdict">Run "Compare Algorithms" to see results</div>
-        </div>
-
-        <div class="panel insight-panel">
-          <div class="panel-title">💡 Spending Insights</div>
-          <div id="insights-list" class="insights-list">
-            <div class="empty-state">Insights will appear after sorting</div>
-          </div>
-        </div>
-
-      </div><!-- /.bottom-grid -->
-
     </main>
 
-  </div><!-- /.main-container -->
+  </div>
 
-  <script src="script.js" defer></script>
+<!-- ═══ JavaScript (untouched) ════════════════════════════════ -->
+<script>
+  let array = [];
+  let isSorting = false;
+  let stopFlag = false;
+  let isPaused = false;
+  let comparisons = 0, swaps = 0, steps = 0;
+  let startTime = 0;
+  let timerInterval = null;
+  let totalPausedTime = 0;
+  let pauseStartTime = 0;
+
+  let audioCtx = null;
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function playBeep(freq = 200) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.015, audioCtx.currentTime);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.05);
+  }
+
+  const container = document.getElementById('bar-container');
+  const genBtn    = document.getElementById('gen-btn');
+  const sortBtn   = document.getElementById('sort-btn');
+  const pauseBtn  = document.getElementById('pause-btn');
+  const stopBtn   = document.getElementById('stop-btn');
+  const algoSel   = document.getElementById('algo-select');
+  const sizeSlider= document.getElementById('size-slider');
+  const speedSlider=document.getElementById('speed-slider');
+  const sizeVal   = document.getElementById('size-val');
+  const speedVal  = document.getElementById('speed-val');
+  const stepsEl   = document.getElementById('steps');
+  const compEl    = document.getElementById('comparisons');
+  const swapsEl   = document.getElementById('swaps');
+  const timeEl    = document.getElementById('time-ms');
+  const statusDot = document.getElementById('status-dot');
+  const statusTxt = document.getElementById('status-text');
+  const arrayInfo = document.getElementById('array-info');
+  const explanation = document.getElementById('explanation');
+
+  sizeSlider.addEventListener('input', () => { sizeVal.textContent = sizeSlider.value; });
+  speedSlider.addEventListener('input', () => { speedVal.textContent = speedSlider.value; });
+
+  function getDelay() {
+    const s = parseInt(speedSlider.value);
+    // speed 1 = 300ms, speed 10 = 5ms
+    return Math.max(5, 300 / s);
+  }
+
+  function setStatus(msg, state='idle') {
+    statusTxt.textContent = msg;
+    statusDot.className = 'status-dot' + (state === 'sorting' ? ' active' : state === 'done' ? ' done' : '');
+  }
+
+  function generateArray() {
+    const n = parseInt(sizeSlider.value);
+    array = Array.from({ length: n }, () => Math.floor(Math.random() * 85) + 10);
+    resetStats();
+    renderBars([], [], [], []);
+    setStatus(`Array of ${n} elements generated — ready to sort`);
+    arrayInfo.textContent = `n = ${n}`;
+  }
+
+  function resetStats() {
+    comparisons = 0; swaps = 0; steps = 0;
+    totalPausedTime = 0;
+    stepsEl.textContent = '0';
+    compEl.textContent = '0';
+    swapsEl.textContent = '0';
+    timeEl.textContent = '0ms';
+    if(explanation) explanation.textContent = 'Explanation will appear here...';
+    clearInterval(timerInterval);
+  }
+
+  function renderBars(active=[], compare=[], sorted=[], pivot=[]) {
+    container.innerHTML = '';
+    const containerH = container.clientHeight - 24; // slightly smaller relative to container to ensure space at top
+    const max = Math.max(...array, 1);
+    array.forEach((val, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = `${(val / max) * containerH}px`;
+      if (pivot.includes(i))   bar.classList.add('pivot');
+      else if (active.includes(i))   bar.classList.add('active');
+      else if (compare.includes(i))  bar.classList.add('compare');
+      else if (sorted.includes(i))   bar.classList.add('sorted');
+      container.appendChild(bar);
+    });
+  }
+
+  async function sleep(ms) {
+    while (isPaused && !stopFlag) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function isSorted(arr) {
+    for (let i = 1; i < arr.length; i++) {
+      if (arr[i] < arr[i - 1]) return false;
+    }
+    return true;
+  }
+
+  async function startSorting() {
+    initAudio();
+    if (!array.length) { generateArray(); return; }
+    if (isSorted(array)) {
+      setStatus('Array already sorted!', 'done');
+      renderBars([], [], [...Array(array.length).keys()], []);
+      return;
+    }
+    isSorting = true; stopFlag = false; isPaused = false;
+    pauseBtn.textContent = 'Pause';
+    pauseBtn.className = 'btn btn-secondary';
+    
+    genBtn.disabled = true;
+    sortBtn.disabled = true;
+    pauseBtn.style.display = 'inline-flex';
+    algoSel.disabled = true;
+    sizeSlider.disabled = true;
+    speedSlider.disabled = true;
+    stopBtn.style.display = 'inline-flex'; // Changed from inline-block for better flex alignment
+    resetStats();
+    startTime = performance.now();
+    timerInterval = setInterval(() => {
+      timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
+    }, 50);
+    setStatus('Sorting…', 'sorting');
+
+    const algo = algoSel.value;
+    try {
+      if (algo === 'merge') await mergeSort(0, array.length - 1, new Set());
+      else                  await quickSort(0, array.length - 1, new Set());
+    } catch(e) { /* stopped */ }
+
+    clearInterval(timerInterval);
+    timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
+
+    if (!stopFlag) {
+      for (let i = 0; i < array.length; i++) {
+        renderBars([], [], Array.from({length: i + 1}, (_, k) => k), []);
+        await sleep(10);
+      }
+      setStatus('Sorted! ✓', 'done');
+      arrayInfo.textContent = `Sorted Array Ready | n = ${array.length}`;
+    } else {
+      renderBars([], [], [], []);
+      setStatus('Stopped — array may be partially sorted');
+    }
+
+    isSorting = false;
+    genBtn.disabled = false;
+    sortBtn.disabled = false;
+    pauseBtn.style.display = 'none';
+    algoSel.disabled = false;
+    sizeSlider.disabled = false;
+    speedSlider.disabled = false;
+    stopBtn.style.display = 'none';
+  }
+
+  // ─── MERGE SORT ────────────────────────────────────────────────────────────
+  async function mergeSort(l, r, sorted) {
+    if (stopFlag) throw 'stop';
+    if (l >= r) return;
+    const m = Math.floor((l + r) / 2);
+    await mergeSort(l, m, sorted);
+    await mergeSort(m + 1, r, sorted);
+    await merge(l, m, r, sorted);
+  }
+
+  async function merge(l, m, r, sorted) {
+    const left  = array.slice(l, m + 1);
+    const right = array.slice(m + 1, r + 1);
+    let i = 0, j = 0, k = l;
+
+    while (i < left.length && j < right.length) {
+      if (stopFlag) throw 'stop';
+      explanation.textContent = `Comparing left[${i}] and right[${j}] subarrays...`;
+      comparisons++;
+      steps++; stepsEl.textContent = steps;
+      compEl.textContent = comparisons;
+      renderBars([k], [l + i, m + 1 + j], [...sorted], []);
+      playBeep(200 + array[k] * 2);
+      await sleep(getDelay());
+
+      if (left[i] <= right[j]) { 
+        array[k++] = left[i++]; 
+        steps++; stepsEl.textContent = steps;
+      }
+      else                     { array[k++] = right[j++]; swaps++; swapsEl.textContent = swaps; }
+    }
+    while (i < left.length) { 
+      array[k++] = left[i++]; 
+      steps++; stepsEl.textContent = steps;
+    }
+    while (j < right.length){ 
+      array[k++] = right[j++]; 
+      steps++; stepsEl.textContent = steps;
+    }
+
+    if (r - l === array.length - 1) {
+      for (let x = l; x <= r; x++) sorted.add(x);
+    }
+    renderBars([], [], [...sorted], []);
+    await sleep(getDelay());
+  }
+
+  // ─── QUICK SORT ────────────────────────────────────────────────────────────
+  async function quickSort(l, r, sorted) {
+    if (stopFlag) throw 'stop';
+    if (l >= r) { sorted.add(l); return; }
+    const pi = await partition(l, r, sorted);
+    sorted.add(pi);
+    await quickSort(l, pi - 1, sorted);
+    await quickSort(pi + 1, r, sorted);
+  }
+
+  async function partition(l, r, sorted) {
+    const pivot = array[r];
+    let i = l - 1;
+    for (let j = l; j < r; j++) {
+      if (stopFlag) throw 'stop';
+      explanation.textContent = `Comparing element array[${j}] with pivot (${pivot})...`;
+      comparisons++;
+      steps++; stepsEl.textContent = steps;
+      compEl.textContent = comparisons;
+      renderBars([i + 1], [j], [...sorted], [r]);
+      playBeep(200 + array[j] * 2);
+      await sleep(getDelay());
+
+      if (array[j] < pivot) {
+        i++;
+        [array[i], array[j]] = [array[j], array[i]];
+        swaps++; swapsEl.textContent = swaps;
+        steps++; stepsEl.textContent = steps;
+        renderBars([i, j], [], [...sorted], [r]);
+        await sleep(getDelay());
+      }
+    }
+    [array[i + 1], array[r]] = [array[r], array[i + 1]];
+    swaps++; swapsEl.textContent = swaps;
+    steps++; stepsEl.textContent = steps;
+    return i + 1;
+  }
+
+  genBtn.addEventListener('click', () => { if (!isSorting) generateArray(); });
+  sortBtn.addEventListener('click', () => { if (!isSorting) startSorting(); });
+  pauseBtn.addEventListener('click', () => {
+    isPaused = !isPaused;
+    pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+    pauseBtn.className = isPaused ? 'btn btn-primary' : 'btn btn-secondary';
+    
+    if (isPaused) {
+      pauseStartTime = performance.now();
+      clearInterval(timerInterval);
+      setStatus('Paused', 'idle');
+    } else {
+      totalPausedTime += performance.now() - pauseStartTime;
+      timerInterval = setInterval(() => {
+        timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
+      }, 50);
+      setStatus('Sorting…', 'sorting');
+    }
+  });
+  stopBtn.addEventListener('click', () => { stopFlag = true; isPaused = false; });
+
+  // Init
+  generateArray();
+</script>
 </body>
 </html>
