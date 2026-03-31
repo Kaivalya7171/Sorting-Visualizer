@@ -1,338 +1,647 @@
-let array = [];
-  let isSorting = false;
-  let stopFlag = false;
-  let isPaused = false;
-  let comparisons = 0, swaps = 0, steps = 0;
-  let startTime = 0;
-  let timerInterval = null;
-  let totalPausedTime = 0;
-  let pauseStartTime = 0;
-  let soundEnabled = true;
-  let lastMergeTime = 0;
-  let lastQuickTime = 0;
+'use strict';
 
-  let audioCtx = null;
-  function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+let expenses = [], original = [];
+let isSorting = false, stopFlag = false;
+let comparisons = 0, swaps = 0, startTime = 0;
+let selectedAlgo = 'merge', sortDir = 'asc';
+let stepByStep = true, fastMode = false, renderThrottle = 0;
+let perfMerge = { time: 0, comparisons: 0 };
+let perfQuick = { time: 0, comparisons: 0 };
+
+const $ = id => document.getElementById(id);
+const inpCategory     = $('inp-category');
+const inpAmount       = $('inp-amount');
+const addBtn          = $('add-btn');
+const clearAllBtn     = $('clear-all-btn');
+const sampleBtn       = $('sample-btn');
+const csvFile         = $('csv-file');
+const fileDropArea    = $('file-drop-area');
+const fileDropLabel   = $('file-drop-label');
+const expenseList     = $('expense-list');
+const expenseCount    = $('expense-count');
+const speedSlider     = $('speed-slider');
+const speedVal        = $('speed-val');
+const sortBtn         = $('sort-btn');
+const compareBtn      = $('compare-btn');
+const stopBtn         = $('stop-btn');
+const stepToggle      = $('step-toggle');
+const stepLabel       = $('step-label');
+const barContainer    = $('bar-container');
+const statusDot       = $('status-dot');
+const statusText      = $('status-text');
+const stepExplanation = $('step-explanation');
+const statComparisons = $('stat-comparisons');
+const statSwaps       = $('stat-swaps');
+const statTime        = $('stat-time');
+const statN           = $('stat-n');
+const sortedResults   = $('sorted-results');
+const insightsList    = $('insights-list');
+const headerAlgoBadge = $('header-algo-badge');
+const perfMergeVal    = $('perf-merge-val');
+const perfMergeBar    = $('perf-merge-bar');
+const perfMergeCmp    = $('perf-merge-cmp');
+const perfQuickVal    = $('perf-quick-val');
+const perfQuickBar    = $('perf-quick-bar');
+const perfQuickCmp    = $('perf-quick-cmp');
+const perfVerdict     = $('perf-verdict');
+const infoTitle       = $('info-title');
+const infoContent     = $('info-content');
+
+function delay(ms) {
+  if (fastMode || !stepByStep) return Promise.resolve();
+  return new Promise(res => setTimeout(res, ms));
+}
+
+function getDelay() {
+  const s = parseInt(speedSlider.value);
+  const n = expenses.length;
+  const f = n <= 10 ? 0.5 : n <= 20 ? 0.75 : 1;
+  return Math.max(15, Math.round((160 / s) * f));
+}
+
+function shouldRender() {
+  if (fastMode) return false;
+  if (!stepByStep) {
+    renderThrottle++;
+    const skip = expenses.length > 30 ? 8 : expenses.length > 15 ? 5 : 3;
+    return renderThrottle % skip === 0;
   }
-  function playBeep(freq = 200) {
-    if (!audioCtx || !soundEnabled) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.frequency.value = freq;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.015, audioCtx.currentTime);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.05);
+  return true;
+}
+
+function yieldToBrowser() { return new Promise(res => setTimeout(res, 0)); }
+function fmt(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
+function cloneExpenses(arr) { return arr.map(e => ({ ...e })); }
+function shouldSwap(pivot, el) {
+  return sortDir === 'asc' ? el.amount < pivot.amount : el.amount > pivot.amount;
+}
+function cmpAsc(a, b) { return sortDir === 'asc' ? a.amount <= b.amount : a.amount >= b.amount; }
+
+function setStatus(msg, state = 'idle') {
+  statusText.textContent = msg;
+  const cls = state === 'sorting' ? ' active' : state === 'done' ? ' done' : state === 'compare' ? ' compare' : '';
+  statusDot.className = 'status-dot' + cls;
+}
+
+function setExplanation(msg) { stepExplanation.textContent = msg; }
+
+function updateStats() {
+  statComparisons.textContent = comparisons;
+  statSwaps.textContent = swaps;
+  statTime.textContent = Math.round(performance.now() - startTime) + 'ms';
+}
+
+function resetStats() {
+  comparisons = swaps = 0;
+  statComparisons.textContent = statSwaps.textContent = '0';
+  statTime.textContent = '0ms';
+}
+
+function addExpense(category, amount) {
+  const cat = category.trim();
+  const amt = parseFloat(amount);
+  if (!cat) { flashInput(inpCategory, 'Category cannot be empty'); return; }
+  if (isNaN(amt) || amt <= 0) { flashInput(inpAmount, 'Enter a valid positive number'); return; }
+  expenses.push({ category: cat, amount: Math.round(amt * 100) / 100 });
+  renderExpenseList();
+  renderBars([], [], [], []);
+  clearResults();
+  inpCategory.value = inpAmount.value = '';
+  inpCategory.focus();
+}
+
+function flashInput(el, msg) {
+  el.style.borderColor = 'var(--red)';
+  el.placeholder = msg;
+  el.focus();
+  setTimeout(() => {
+    el.style.borderColor = '';
+    el.placeholder = el === inpCategory ? 'Category (e.g. Food)' : 'Amount';
+  }, 1800);
+}
+
+function removeExpense(idx) {
+  expenses.splice(idx, 1);
+  renderExpenseList();
+  renderBars([], [], [], []);
+  clearResults();
+}
+
+function clearAll() {
+  if (!expenses.length) return;
+  expenses = [];
+  renderExpenseList();
+  clearBars();
+  clearResults();
+  setStatus('All expenses cleared.');
+  setExplanation('Step-by-step comparisons will appear here');
+}
+
+function clearResults() {
+  sortedResults.innerHTML = '<div class="empty-state">Results will appear after sorting</div>';
+  insightsList.innerHTML  = '<div class="empty-state">Insights will appear after sorting</div>';
+  statN.textContent = expenses.length;
+  resetStats();
+}
+
+const SAMPLE_EXPENSES = [
+  { category: 'Groceries',   amount: 850  },
+  { category: 'Travel',      amount: 340  },
+  { category: 'Shopping',    amount: 2200 },
+  { category: 'Food',        amount: 620  },
+  { category: 'Electricity', amount: 1450 },
+  { category: 'Internet',    amount: 499  },
+  { category: 'Movies',      amount: 250  },
+  { category: 'Gym',         amount: 700  },
+];
+
+function loadSampleExpenses() {
+  expenses = cloneExpenses(SAMPLE_EXPENSES);
+  renderExpenseList();
+  renderBars([], [], [], []);
+  clearResults();
+  setStatus(`${expenses.length} sample expenses loaded — ready to sort`, 'idle');
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderExpenseList() {
+  expenseCount.textContent = statN.textContent = expenses.length;
+  expenseList.innerHTML = expenses.length
+    ? expenses.map((e, i) => `
+        <div class="expense-item">
+          <span class="expense-item-cat">${escHtml(e.category)}</span>
+          <span class="expense-item-amt">${fmt(e.amount)}</span>
+          <button class="expense-item-del" onclick="removeExpense(${i})" title="Remove">✕</button>
+        </div>`).join('')
+    : '<div class="empty-state">No expenses yet. Add some above!</div>';
+}
+
+function renderBars(active = [], compare = [], sorted = [], pivot = []) {
+  if (!expenses.length) {
+    barContainer.innerHTML = '<div class="bars-empty-state">Add expenses to visualize sorting</div>';
+    return;
   }
+  const h = barContainer.clientHeight - 40 || 240;
+  const max = Math.max(...expenses.map(e => e.amount), 1);
+  const sortedSet   = new Set(sorted);
+  const activeSet   = new Set(active);
+  const compareSet  = new Set(compare);
+  const pivotSet    = new Set(pivot);
+  const allSorted   = sorted.length === expenses.length;
+  const maxIdx = allSorted ? expenses.reduce((mi, e, i, a) => e.amount > a[mi].amount ? i : mi, 0) : -1;
+  const minIdx = allSorted ? expenses.reduce((mi, e, i, a) => e.amount < a[mi].amount ? i : mi, 0) : -1;
 
-  const container = document.getElementById('bar-container');
-  const genBtn    = document.getElementById('gen-btn');
-  const sortBtn   = document.getElementById('sort-btn');
-  const pauseBtn  = document.getElementById('pause-btn');
-  const stopBtn   = document.getElementById('stop-btn');
-  const worstCaseBtn = document.getElementById('worst-case-btn');
-  const soundToggle = document.getElementById('sound-toggle');
-  const algoSel   = document.getElementById('algo-select');
-  const sizeSlider= document.getElementById('size-slider');
-  const speedSlider=document.getElementById('speed-slider');
-  const sizeVal   = document.getElementById('size-val');
-  const speedVal  = document.getElementById('speed-val');
-  const stepsEl   = document.getElementById('steps');
-  const compEl    = document.getElementById('comparisons');
-  const swapsEl   = document.getElementById('swaps');
-  const timeEl    = document.getElementById('time-ms');
-  const statusDot = document.getElementById('status-dot');
-  const statusTxt = document.getElementById('status-text');
-  const arrayInfo = document.getElementById('array-info');
-  const explanation = document.getElementById('explanation');
+  barContainer.innerHTML = expenses.map((e, i) => {
+    const barH = Math.max(4, Math.round((e.amount / max) * h));
+    let cls = 'bar';
+    if (pivotSet.has(i))                           cls += ' pivot';
+    else if (activeSet.has(i))                     cls += ' active';
+    else if (compareSet.has(i))                    cls += ' compare';
+    else if (allSorted && i === maxIdx)            cls += ' highest';
+    else if (allSorted && i === minIdx)            cls += ' lowest';
+    else if (sortedSet.has(i))                     cls += ' sorted';
+    return `<div class="bar-column"><div class="${cls}" style="height:${barH}px;"></div><div class="bar-label">${escHtml(e.category)}</div></div>`;
+  }).join('');
+}
 
-  sizeSlider.addEventListener('input', () => { sizeVal.textContent = sizeSlider.value; });
-  speedSlider.addEventListener('input', () => { speedVal.textContent = speedSlider.value; });
+function clearBars() {
+  barContainer.innerHTML = '<div class="bars-empty-state">Add expenses to visualize sorting</div>';
+}
 
-  function getDelay() {
-    const s = parseInt(speedSlider.value);
-    // speed 1 = 300ms, speed 10 = 5ms
-    return Math.max(5, 300 / s);
-  }
+function renderSortedResults() {
+  if (!expenses.length) { sortedResults.innerHTML = '<div class="empty-state">No expenses to display</div>'; return; }
+  const maxAmt = Math.max(...expenses.map(e => e.amount));
+  const minAmt = Math.min(...expenses.map(e => e.amount));
+  sortedResults.innerHTML = expenses.map((e, i) => {
+    const isMax = e.amount === maxAmt, isMin = e.amount === minAmt;
+    const color = isMax ? 'var(--red)' : isMin ? 'var(--bar-lowest)' : 'var(--accent)';
+    const tag   = isMax ? '<span class="result-tag tag-highest">Highest</span>'
+                : isMin ? '<span class="result-tag tag-lowest">Lowest</span>' : '';
+    return `<div class="result-item" style="animation-delay:${i*40}ms">
+      <span class="result-rank">#${i+1}</span>
+      <span class="result-cat">${escHtml(e.category)}</span>
+      <span class="result-amt" style="color:${color}">${fmt(e.amount)}</span>${tag}
+    </div>`;
+  }).join('');
+}
 
-  function setStatus(msg, state='idle') {
-    statusTxt.textContent = msg;
-    statusDot.className = 'status-dot' + (state === 'sorting' ? ' active' : state === 'done' ? ' done' : '');
-  }
+function generateInsights() {
+  if (!expenses.length) return;
+  const total    = expenses.reduce((s, e) => s + e.amount, 0);
+  const avg      = total / expenses.length;
+  const sorted   = [...expenses].sort((a, b) => b.amount - a.amount);
+  const highest  = sorted[0], lowest = sorted[sorted.length - 1];
+  const topShare = ((highest.amount / total) * 100).toFixed(1);
+  const aboveAvg = expenses.filter(e => e.amount > avg);
 
-  function generateArray() {
-    const n = parseInt(sizeSlider.value);
-    array = Array.from({ length: n }, () => Math.floor(Math.random() * 85) + 10);
-    resetStats();
-    renderBars([], [], [], []);
-    setStatus(`Array of ${n} elements generated — ready to sort`);
-    arrayInfo.textContent = `n = ${n}`;
-  }
+  const items = [
+    { icon: '💸', type: 'alert', text: `You are spending the <strong>most on ${highest.category}</strong> (${fmt(highest.amount)}).` },
+    { icon: '✅', type: 'good',  text: `Your <strong>lowest expense</strong> is ${lowest.category} at ${fmt(lowest.amount)}.` },
+    { icon: '📊', type: 'info',  text: `Total spending: <strong>${fmt(total)}</strong> across ${expenses.length} categories.` },
+    { icon: '📈', type: 'info',  text: `Average expense per category: <strong>${fmt(Math.round(avg))}</strong>.` },
+  ];
 
-  function resetStats() {
-    comparisons = 0; swaps = 0; steps = 0;
-    totalPausedTime = 0;
-    stepsEl.textContent = '0';
-    compEl.textContent = '0';
-    swapsEl.textContent = '0';
-    timeEl.textContent = '0ms';
-    if(explanation) explanation.textContent = 'Explanation will appear here...';
-    clearInterval(timerInterval);
-  }
+  if (parseFloat(topShare) > 40)
+    items.push({ icon: '⚠️', type: 'warn', text: `<strong>${highest.category}</strong> takes up <strong>${topShare}%</strong> of your total budget. Consider reducing it.` });
 
-  function renderBars(active=[], compare=[], sorted=[], pivot=[]) {
-    container.innerHTML = '';
-    const containerH = container.clientHeight - 24; // slightly smaller relative to container to ensure space at top
-    const max = Math.max(...array, 1);
-    array.forEach((val, i) => {
-      const bar = document.createElement('div');
-      bar.className = 'bar';
-      bar.style.height = `${(val / max) * containerH}px`;
-      if (pivot.includes(i))   bar.classList.add('pivot');
-      else if (active.includes(i))   bar.classList.add('active');
-      else if (compare.includes(i))  bar.classList.add('compare');
-      else if (sorted.includes(i))   bar.classList.add('sorted');
-      container.appendChild(bar);
-    });
-  }
+  if (aboveAvg.length && aboveAvg.length < expenses.length)
+    items.push({ icon: '🔍', type: 'warn', text: `<strong>${aboveAvg.length} categor${aboveAvg.length > 1 ? 'ies' : 'y'}</strong> above average: ${aboveAvg.map(e => e.category).join(', ')}.` });
 
-  async function sleep(ms) {
-    while (isPaused && !stopFlag) {
-      await new Promise(r => setTimeout(r, 50));
+  if (expenses.length >= 3)
+    items.push({ icon: '💡', type: 'good', text: `Sorting revealed the expense hierarchy clearly — Used ${selectedAlgo === 'merge' ? 'Merge' : 'Quick'} Sort with <strong>${comparisons} comparisons</strong>.` });
+
+  insightsList.innerHTML = items.map(ins =>
+    `<div class="insight-item ${ins.type}"><span class="insight-icon">${ins.icon}</span><span class="insight-text">${ins.text}</span></div>`
+  ).join('');
+}
+
+async function animatedMergeSort(arr, l, r, ss) {
+  if (stopFlag) throw new Error('stopped');
+  if (l >= r) return;
+  const m = Math.floor((l + r) / 2);
+  setExplanation(`Dividing range [${l}…${r}] → left [${l}…${m}] | right [${m+1}…${r}]`);
+  await animatedMergeSort(arr, l, m, ss);
+  await animatedMergeSort(arr, m + 1, r, ss);
+  await animatedMerge(arr, l, m, r, ss);
+}
+
+async function animatedMerge(arr, l, m, r, ss) {
+  const left = arr.slice(l, m + 1), right = arr.slice(m + 1, r + 1);
+  let i = 0, j = 0, k = l;
+  while (i < left.length && j < right.length) {
+    if (stopFlag) throw new Error('stopped');
+    comparisons++;
+    if (shouldRender()) {
+      renderBars([k], [l + i, m + 1 + j], [...ss], []);
+      updateStats();
+      setExplanation(`Comparing "${left[i].category}" (${fmt(left[i].amount)}) vs "${right[j].category}" (${fmt(right[j].amount)})`);
+      await delay(getDelay());
+      if (stopFlag) throw new Error('stopped');
+    } else if (comparisons % 50 === 0) {
+      await yieldToBrowser();
+      if (stopFlag) throw new Error('stopped');
     }
-    return new Promise(resolve => setTimeout(resolve, ms));
+    if (cmpAsc(left[i], right[j])) { arr[k] = left[i++]; }
+    else                           { arr[k] = right[j++]; swaps++; }
+    expenses[k] = arr[k]; k++;
   }
+  while (i < left.length)  { arr[k] = left[i++];  expenses[k] = arr[k]; k++; }
+  while (j < right.length) { arr[k] = right[j++]; expenses[k] = arr[k]; k++; }
+  for (let x = l; x <= r; x++) ss.add(x);
+  if (shouldRender()) { renderBars([], [], [...ss], []); await delay(getDelay() * 0.35); }
+}
 
-  function isSorted(arr) {
-    for (let i = 1; i < arr.length; i++) {
-      if (arr[i] < arr[i - 1]) return false;
+async function animatedQuickSort(arr, l, r, ss) {
+  if (stopFlag) throw new Error('stopped');
+  if (l >= r) { ss.add(l); return; }
+  const pi = await animatedPartition(arr, l, r, ss);
+  ss.add(pi);
+  await animatedQuickSort(arr, l, pi - 1, ss);
+  await animatedQuickSort(arr, pi + 1, r, ss);
+}
+
+async function animatedPartition(arr, l, r, ss) {
+  const pivot = arr[r];
+  if (shouldRender()) setExplanation(`Pivot chosen: "${pivot.category}" (${fmt(pivot.amount)})`);
+  let i = l - 1;
+  for (let j = l; j < r; j++) {
+    if (stopFlag) throw new Error('stopped');
+    comparisons++;
+    if (shouldRender()) {
+      renderBars([i + 1], [j], [...ss], [r]);
+      updateStats();
+      setExplanation(`Comparing "${arr[j].category}" (${fmt(arr[j].amount)}) with pivot "${pivot.category}" (${fmt(pivot.amount)})`);
+      await delay(getDelay());
+      if (stopFlag) throw new Error('stopped');
+    } else if (comparisons % 50 === 0) {
+      await yieldToBrowser();
+      if (stopFlag) throw new Error('stopped');
     }
-    return true;
-  }
-
-  async function startSorting() {
-    initAudio();
-    if (!array.length) { generateArray(); return; }
-    if (isSorted(array)) {
-      setStatus('Array already sorted!', 'done');
-      renderBars([], [], [...Array(array.length).keys()], []);
-      return;
-    }
-    isSorting = true; stopFlag = false; isPaused = false;
-    pauseBtn.textContent = 'Pause';
-    pauseBtn.className = 'btn btn-secondary';
-    
-    genBtn.disabled = true;
-    sortBtn.disabled = true;
-    pauseBtn.style.display = 'inline-flex';
-    algoSel.disabled = true;
-    sizeSlider.disabled = true;
-    speedSlider.disabled = true;
-    stopBtn.style.display = 'inline-flex'; // Changed from inline-block for better flex alignment
-    resetStats();
-    startTime = performance.now();
-    timerInterval = setInterval(() => {
-      timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
-    }, 50);
-    setStatus('Sorting…', 'sorting');
-
-    const algo = algoSel.value;
-    try {
-      if (algo === 'merge') await mergeSort(0, array.length - 1, new Set());
-      else                  await quickSort(0, array.length - 1, new Set());
-    } catch(e) { /* stopped */ }
-
-    clearInterval(timerInterval);
-    const timeTaken = performance.now() - startTime - totalPausedTime;
-    timeEl.textContent = Math.round(timeTaken) + 'ms';
-
-    if (!stopFlag) {
-      if(algo === 'merge') lastMergeTime = timeTaken;
-      else                 lastQuickTime = timeTaken;
-      updatePerformanceGraph();
-    }
-
-    if (!stopFlag) {
-      for (let i = 0; i < array.length; i++) {
-        renderBars([], [], Array.from({length: i + 1}, (_, k) => k), []);
-        await sleep(10);
+    if (shouldSwap(pivot, arr[j])) {
+      i++;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      expenses[i] = arr[i]; expenses[j] = arr[j];
+      swaps++;
+      if (shouldRender()) {
+        updateStats();
+        renderBars([i, j], [], [...ss], [r]);
+        setExplanation(`Swapping "${arr[i].category}" ↔ "${arr[j].category}"`);
+        await delay(getDelay());
+        if (stopFlag) throw new Error('stopped');
       }
-      setStatus('Sorted! ✓', 'done');
-      arrayInfo.textContent = `Sorted Array Ready | n = ${array.length}`;
-    } else {
-      renderBars([], [], [], []);
-      setStatus('Stopped — array may be partially sorted');
     }
+  }
+  [arr[i + 1], arr[r]] = [arr[r], arr[i + 1]];
+  expenses[i + 1] = { ...arr[i + 1] };
+  expenses[r]     = { ...arr[r] };
+  swaps++;
+  if (shouldRender()) updateStats();
+  return i + 1;
+}
 
+function instantMergeSort(arr, l, r, cmp) {
+  if (l >= r) return;
+  const m = Math.floor((l + r) / 2);
+  instantMergeSort(arr, l, m, cmp);
+  instantMergeSort(arr, m + 1, r, cmp);
+  const left = arr.slice(l, m + 1), right = arr.slice(m + 1, r + 1);
+  let i = 0, j = 0, k = l;
+  while (i < left.length && j < right.length) {
+    cmp.count++;
+    arr[k++] = cmpAsc(left[i], right[j]) ? left[i++] : right[j++];
+  }
+  while (i < left.length)  arr[k++] = left[i++];
+  while (j < right.length) arr[k++] = right[j++];
+}
+
+function instantQuickSort(arr, l, r, cmp) {
+  if (l >= r) return;
+  const pi = instantPartition(arr, l, r, cmp);
+  instantQuickSort(arr, l, pi - 1, cmp);
+  instantQuickSort(arr, pi + 1, r, cmp);
+}
+
+function instantPartition(arr, l, r, cmp) {
+  const pivot = arr[r];
+  let i = l - 1;
+  for (let j = l; j < r; j++) {
+    cmp.count++;
+    if (shouldSwap(pivot, arr[j])) { i++; [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  }
+  [arr[i + 1], arr[r]] = [arr[r], arr[i + 1]];
+  return i + 1;
+}
+
+async function startSorting() {
+  if (!expenses.length) { setStatus('Add at least one expense first!', 'idle'); return; }
+  if (expenses.length === 1) {
+    setStatus('Only 1 expense — already sorted!', 'done');
+    renderBars([], [], [0], []);
+    renderSortedResults();
+    generateInsights();
+    return;
+  }
+  isSorting = true; stopFlag = false; renderThrottle = 0;
+  setUILocked(true);
+  resetStats();
+  original = cloneExpenses(expenses);
+  const arr = cloneExpenses(expenses);
+  const ss  = new Set();
+  const autoFast = !stepByStep && expenses.length <= 10;
+  const usingFast = fastMode || autoFast;
+  startTime = performance.now();
+  setStatus(`Sorting with ${selectedAlgo === 'merge' ? 'Merge' : 'Quick'} Sort${usingFast ? ' (Fast)' : ''}…`, 'sorting');
+
+  if (usingFast) {
+    const cmp = { count: 0 };
+    if (selectedAlgo === 'merge') instantMergeSort(arr, 0, arr.length - 1, cmp);
+    else                          instantQuickSort(arr, 0, arr.length - 1, cmp);
+    comparisons = cmp.count;
+    expenses = arr;
+    const elapsed = Math.round(performance.now() - startTime);
+    statTime.textContent = elapsed + 'ms';
+    statComparisons.textContent = comparisons;
+    statSwaps.textContent = swaps;
+    renderExpenseList();
+    renderBars([], [], expenses.map((_, i) => i), []);
+    setStatus(`Sorted! ✓  —  ${comparisons} comparisons in ${elapsed}ms${autoFast ? ' (auto-fast)' : ' (Fast Mode)'}`, 'done');
+    setExplanation(`${selectedAlgo === 'merge' ? 'Merge' : 'Quick'} Sort complete instantly.`);
+    renderSortedResults();
+    generateInsights();
+    setUILocked(false);
     isSorting = false;
-    genBtn.disabled = false;
-    sortBtn.disabled = false;
-    pauseBtn.style.display = 'none';
-    algoSel.disabled = false;
-    sizeSlider.disabled = false;
-    speedSlider.disabled = false;
-    stopBtn.style.display = 'none';
+    return;
   }
 
-  // ─── MERGE SORT ────────────────────────────────────────────────────────────
-  async function mergeSort(l, r, sorted) {
-    if (stopFlag) throw 'stop';
-    if (l >= r) return;
-    explanation.textContent = "Dividing array into two halves...";
-    const m = Math.floor((l + r) / 2);
-    await mergeSort(l, m, sorted);
-    await mergeSort(m + 1, r, sorted);
-    await merge(l, m, r, sorted);
+  try {
+    if (selectedAlgo === 'merge') await animatedMergeSort(arr, 0, arr.length - 1, ss);
+    else                          await animatedQuickSort(arr, 0, arr.length - 1, ss);
+  } catch (_) {
+    expenses = cloneExpenses(original);
+    renderExpenseList();
+    renderBars([], [], [], []);
+    setStatus('Sorting stopped.', 'idle');
+    setExplanation('Sorting was stopped. Expenses restored to original order.');
+    setUILocked(false);
+    isSorting = false;
+    return;
   }
 
-  async function merge(l, m, r, sorted) {
-    const left  = array.slice(l, m + 1);
-    const right = array.slice(m + 1, r + 1);
-    let i = 0, j = 0, k = l;
+  const elapsed = Math.round(performance.now() - startTime);
+  statTime.textContent = elapsed + 'ms';
+  expenses = cloneExpenses(arr);
+  renderExpenseList();
+  renderBars([], [], expenses.map((_, i) => i), []);
+  setStatus(`Sorted! ✓  —  ${comparisons} comparisons in ${elapsed}ms`, 'done');
+  setExplanation(`${selectedAlgo === 'merge' ? 'Merge' : 'Quick'} Sort complete. Highest: ${expenses[sortDir === 'desc' ? 0 : expenses.length - 1].category}`);
+  renderSortedResults();
+  generateInsights();
+  setUILocked(false);
+  isSorting = false;
+}
 
-    while (i < left.length && j < right.length) {
-      if (stopFlag) throw 'stop';
-      explanation.textContent = `Merging sorted subarrays... left[${i}] and right[${j}]`;
-      comparisons++;
-      steps++; stepsEl.textContent = steps;
-      compEl.textContent = comparisons;
-      renderBars([k], [l + i, m + 1 + j], [...sorted], []);
-      playBeep(200 + array[k] * 2);
-      await sleep(getDelay());
+function runComparison() {
+  if (!expenses.length) { setStatus('Add expenses before comparing algorithms.', 'idle'); return; }
+  const base = cloneExpenses(original.length ? original : expenses);
 
-      if (left[i] <= right[j]) { 
-        array[k++] = left[i++]; 
-        steps++; stepsEl.textContent = steps;
+  const run = (sortFn, arr) => {
+    const cmp = { count: 0 }, t0 = performance.now();
+    sortFn(arr, 0, arr.length - 1, cmp);
+    return { time: performance.now() - t0, comparisons: cmp.count };
+  };
+
+  perfMerge = run(instantMergeSort, cloneExpenses(base));
+  perfQuick = run(instantQuickSort, cloneExpenses(base));
+
+  const { time: mTime, comparisons: mCmp } = perfMerge;
+  const { time: qTime, comparisons: qCmp } = perfQuick;
+  const maxT = Math.max(mTime, qTime, 0.001);
+
+  perfMergeVal.textContent = (Math.round(mTime * 1000) / 1000) + 'ms';
+  perfQuickVal.textContent = (Math.round(qTime * 1000) / 1000) + 'ms';
+  perfMergeCmp.textContent = mCmp + ' cmps';
+  perfQuickCmp.textContent = qCmp + ' cmps';
+  perfMergeBar.style.height = `${(mTime / maxT) * 100}%`;
+  perfQuickBar.style.height = `${(qTime / maxT) * 100}%`;
+
+  perfVerdict.className = 'perf-verdict winner';
+  if (mTime < qTime)      perfVerdict.textContent = `✓ Merge Sort was faster by ${(qTime - mTime).toFixed(3)}ms`;
+  else if (qTime < mTime) perfVerdict.textContent = `✓ Quick Sort was faster by ${(mTime - qTime).toFixed(3)}ms`;
+  else                    perfVerdict.textContent = '⚖ Both algorithms performed equally';
+
+  setStatus(`Comparison done! Merge: ${(Math.round(mTime*1000)/1000)}ms (${mCmp} cmps)  |  Quick: ${(Math.round(qTime*1000)/1000)}ms (${qCmp} cmps)`, 'done');
+}
+
+function setUILocked(locked) {
+  [addBtn, clearAllBtn, sampleBtn, sortBtn, compareBtn, csvFile].forEach(el => el.disabled = locked);
+  stopBtn.style.display = locked ? 'inline-flex' : 'none';
+  document.querySelectorAll('.algo-btn').forEach(b => {
+    b.disabled = locked;
+    b.style.pointerEvents = locked ? 'none' : '';
+  });
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return { parsed: [], skipped: 0 };
+
+  const split = line => {
+    for (const sep of [',', ';', ' - ']) if (line.includes(sep)) return line.split(sep).map(p => p.trim());
+    return null;
+  };
+
+  const parsed = [], skipped_ref = { n: 0 };
+  const header = split(lines[0]);
+  let start = 0;
+
+  if (header && header.length >= 2) {
+    const ci = header.findIndex(h => h.toLowerCase().includes('category'));
+    const ai = header.findIndex(h => h.toLowerCase().includes('amount'));
+    if (ci !== -1 && ai !== -1) {
+      for (let i = 1; i < lines.length; i++) {
+        const parts = split(lines[i]);
+        if (!parts || parts.length <= Math.max(ci, ai)) { skipped_ref.n++; continue; }
+        const cat = parts[ci].trim(), amt = parseFloat(parts[ai]);
+        if (!cat || isNaN(amt) || amt <= 0) { skipped_ref.n++; continue; }
+        parsed.push({ category: cat, amount: Math.round(amt * 100) / 100 });
       }
-      else                     { array[k++] = right[j++]; swaps++; swapsEl.textContent = swaps; }
+      return { parsed, skipped: skipped_ref.n };
     }
-    while (i < left.length) { 
-      array[k++] = left[i++]; 
-      steps++; stepsEl.textContent = steps;
-    }
-    while (j < right.length){ 
-      array[k++] = right[j++]; 
-      steps++; stepsEl.textContent = steps;
-    }
-
-    if (r - l === array.length - 1) {
-      for (let x = l; x <= r; x++) sorted.add(x);
-    }
-    renderBars([], [], [...sorted], []);
-    await sleep(getDelay());
+    if (isNaN(parseFloat(header[1]))) start = 1;
   }
 
-  // ─── QUICK SORT ────────────────────────────────────────────────────────────
-  async function quickSort(l, r, sorted) {
-    if (stopFlag) throw 'stop';
-    if (l >= r) { sorted.add(l); return; }
-    explanation.textContent = "Choosing pivot...";
-    const pi = await partition(l, r, sorted);
-    sorted.add(pi);
-    await quickSort(l, pi - 1, sorted);
-    await quickSort(pi + 1, r, sorted);
+  for (let i = start; i < lines.length; i++) {
+    const parts = split(lines[i]);
+    if (!parts || parts.length < 2) { skipped_ref.n++; continue; }
+    const cat = parts[0].trim(), amt = parseFloat(parts[1]);
+    if (!cat || isNaN(amt) || amt <= 0) { skipped_ref.n++; continue; }
+    parsed.push({ category: cat, amount: Math.round(amt * 100) / 100 });
   }
+  return { parsed, skipped: skipped_ref.n };
+}
 
-  async function partition(l, r, sorted) {
-    const pivot = array[r];
-    let i = l - 1;
-    for (let j = l; j < r; j++) {
-      if (stopFlag) throw 'stop';
-      explanation.textContent = `Comparing element array[${j}] with pivot (${pivot})...`;
-      comparisons++;
-      steps++; stepsEl.textContent = steps;
-      compEl.textContent = comparisons;
-      renderBars([i + 1], [j], [...sorted], [r]);
-      playBeep(200 + array[j] * 2);
-      await sleep(getDelay());
+function parseExcel(buffer) {
+  const wb    = XLSX.read(buffer, { type: 'array' });
+  const rows  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+  const parsed = []; let skipped = 0;
+  rows.forEach((row, idx) => {
+    if (!row || row.length < 2) { skipped++; return; }
+    const cat = String(row[0] || '').trim(), rawAmt = row[1];
+    if (idx === 0 && isNaN(parseFloat(rawAmt))) return;
+    const amt = parseFloat(rawAmt);
+    if (!cat || isNaN(amt) || amt <= 0) { skipped++; return; }
+    parsed.push({ category: cat, amount: Math.round(amt * 100) / 100 });
+  });
+  return { parsed, skipped };
+}
 
-      if (array[j] < pivot) {
-        explanation.textContent = "Placing smaller elements to left...";
-        i++;
-        [array[i], array[j]] = [array[j], array[i]];
-        swaps++; swapsEl.textContent = swaps;
-        steps++; stepsEl.textContent = steps;
-        renderBars([i, j], [], [...sorted], [r]);
-        await sleep(getDelay());
-      }
-    }
-    [array[i + 1], array[r]] = [array[r], array[i + 1]];
-    swaps++; swapsEl.textContent = swaps;
-    steps++; stepsEl.textContent = steps;
-    return i + 1;
+function processParsedData(parsed, skipped, fileName) {
+  if (!parsed.length) { setStatus('No valid rows found. Check format: Category, Amount', 'idle'); return; }
+  expenses = [...expenses, ...parsed];
+  renderExpenseList();
+  renderBars([], [], [], []);
+  clearResults();
+  fileDropLabel.textContent = `✓ ${fileName} — ${parsed.length} expenses loaded`;
+  setStatus(`File loaded: ${parsed.length} expenses added${skipped ? ` (${skipped} skipped)` : ''}`, 'done');
+  setTimeout(() => { if (!isSorting && expenses.length > 1) startSorting(); }, 500);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.csv')) {
+    const r = new FileReader();
+    r.onload = e => { const { parsed, skipped } = parseCSV(e.target.result); processParsedData(parsed, skipped, file.name); };
+    r.readAsText(file);
+  } else if (name.endsWith('.xlsx')) {
+    const r = new FileReader();
+    r.onload = e => { const { parsed, skipped } = parseExcel(e.target.result); processParsedData(parsed, skipped, file.name); };
+    r.readAsArrayBuffer(file);
+  } else {
+    setStatus('Unsupported file type. Please upload a .csv or .xlsx file.', 'idle');
   }
+}
 
-  genBtn.addEventListener('click', () => { if (!isSorting) generateArray(); });
-  sortBtn.addEventListener('click', () => { if (!isSorting) startSorting(); });
-  pauseBtn.addEventListener('click', () => {
-    isPaused = !isPaused;
-    pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
-    pauseBtn.className = isPaused ? 'btn btn-primary' : 'btn btn-secondary';
-    
-    if (isPaused) {
-      pauseStartTime = performance.now();
-      clearInterval(timerInterval);
-      setStatus('Paused', 'idle');
-    } else {
-      totalPausedTime += performance.now() - pauseStartTime;
-      timerInterval = setInterval(() => {
-        timeEl.textContent = Math.round(performance.now() - startTime - totalPausedTime) + 'ms';
-      }, 50);
-      setStatus('Sorting…', 'sorting');
+const ALGO_INFO = {
+  merge: { title: 'Merge Sort Info', rows: [['Type','Divide & Conquer'],['Stable','✓ Yes'],['Best','O(n log n)'],['Average','O(n log n)'],['Worst','O(n log n)'],['Space','O(n)']] },
+  quick: { title: 'Quick Sort Info', rows: [['Type','Divide & Conquer'],['Stable','✗ No'],  ['Best','O(n log n)'],['Average','O(n log n)'],['Worst','O(n²)'],        ['Space','O(log n)']] },
+};
+
+function updateAlgoInfo() {
+  const info = ALGO_INFO[selectedAlgo];
+  infoTitle.textContent = info.title;
+  infoContent.innerHTML = info.rows.map(([k, v]) => {
+    const mono = v.startsWith('O(');
+    return `<div class="info-row"><span class="info-key">${k}</span><span class="info-val${mono ? ' mono' : ''}">${v}</span></div>`;
+  }).join('');
+  headerAlgoBadge.textContent = selectedAlgo === 'merge' ? 'Merge Sort' : 'Quick Sort';
+}
+
+addBtn.addEventListener('click', () => addExpense(inpCategory.value, inpAmount.value));
+inpAmount.addEventListener('keydown',   e => e.key === 'Enter' && addExpense(inpCategory.value, inpAmount.value));
+inpCategory.addEventListener('keydown', e => e.key === 'Enter' && inpAmount.focus());
+clearAllBtn.addEventListener('click', clearAll);
+sampleBtn.addEventListener('click', loadSampleExpenses);
+sortBtn.addEventListener('click', () => { if (!isSorting) startSorting(); });
+stopBtn.addEventListener('click', () => { stopFlag = true; });
+compareBtn.addEventListener('click', () => { if (!isSorting) runComparison(); });
+speedSlider.addEventListener('input', () => { speedVal.textContent = speedSlider.value; });
+
+stepToggle.addEventListener('click', () => {
+  if (stepByStep && !fastMode)       { stepByStep = false; stepLabel.textContent = 'Fast Viz'; stepToggle.style.opacity = '0.8'; }
+  else if (!stepByStep && !fastMode) { fastMode = true;    stepLabel.textContent = 'Fast Mode'; stepToggle.style.opacity = '0.6'; }
+  else                               { fastMode = false; stepByStep = true; stepLabel.textContent = 'ON'; stepToggle.style.opacity = '1'; }
+});
+
+document.querySelectorAll('#algo-toggle .algo-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (isSorting) return;
+    selectedAlgo = btn.dataset.algo;
+    document.querySelectorAll('#algo-toggle .algo-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateAlgoInfo();
+    if (original.length) {
+      expenses = cloneExpenses(original);
+      renderExpenseList();
+      renderBars([], [], [], []);
+      clearResults();
+      setStatus(`Switched to ${selectedAlgo === 'merge' ? 'Merge' : 'Quick'} Sort — expenses reset.`);
     }
   });
-  stopBtn.addEventListener('click', () => { stopFlag = true; isPaused = false; });
+});
 
-  if(soundToggle) {
-    soundToggle.addEventListener('click', () => {
-      soundEnabled = !soundEnabled;
-      soundToggle.textContent = soundEnabled ? '🔊 Sound: ON' : '🔇 Sound: OFF';
-    });
-  }
-
-  if(worstCaseBtn) {
-    worstCaseBtn.addEventListener('click', () => {
-      if (!isSorting && array.length > 0) {
-        array.sort((a,b) => a - b);
-        resetStats();
-        renderBars([], [], [], []);
-        setStatus('Worst Case Generated — (Sorted Ascending makes Quick Sort O(n²))', 'idle');
-      }
-    });
-  }
-
-  const infoTitle = document.getElementById('info-title');
-  const infoList  = document.getElementById('info-list');
-  function updateInfoBox() {
-    if(algoSel.value === 'merge') {
-      infoTitle.textContent = 'Merge Sort';
-      infoList.innerHTML = '<li>Divide & Conquer</li><li>Stable</li><li>Uses extra space</li>';
-    } else {
-      infoTitle.textContent = 'Quick Sort';
-      infoList.innerHTML = '<li>In-place</li><li>Faster in practice</li><li>Worst case O(n²)</li>';
+document.querySelectorAll('#dir-toggle .algo-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (isSorting) return;
+    sortDir = btn.dataset.dir;
+    document.querySelectorAll('#dir-toggle .algo-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (original.length) {
+      expenses = cloneExpenses(original);
+      renderExpenseList();
+      renderBars([], [], [], []);
+      clearResults();
+      setStatus(`Direction: ${sortDir === 'asc' ? 'Ascending ↑' : 'Descending ↓'} — expenses reset.`);
     }
-  }
-  algoSel.addEventListener('change', updateInfoBox);
-  updateInfoBox();
+  });
+});
 
-  function updatePerformanceGraph() {
-    const mergeVal = document.getElementById('perf-merge-val');
-    const mergeBar = document.getElementById('perf-merge-bar');
-    const quickVal = document.getElementById('perf-quick-val');
-    const quickBar = document.getElementById('perf-quick-bar');
-    if(!mergeVal) return;
-    
-    mergeVal.textContent = lastMergeTime > 0 ? Math.round(lastMergeTime) + 'ms' : '—';
-    quickVal.textContent = lastQuickTime > 0 ? Math.round(lastQuickTime) + 'ms' : '—';
-    
-    const maxTime = Math.max(lastMergeTime, lastQuickTime, 10);
-    mergeBar.style.height = lastMergeTime > 0 ? `${(lastMergeTime / maxTime) * 100}%` : '0%';
-    quickBar.style.height = lastQuickTime > 0 ? `${(lastQuickTime / maxTime) * 100}%` : '0%';
-  }
+csvFile.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+fileDropArea.addEventListener('click', () => csvFile.click());
+fileDropArea.addEventListener('dragover', e => { e.preventDefault(); fileDropArea.classList.add('drag-over'); });
+fileDropArea.addEventListener('dragleave', () => fileDropArea.classList.remove('drag-over'));
+fileDropArea.addEventListener('drop', e => {
+  e.preventDefault();
+  fileDropArea.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
 
-  // Init
-  generateArray();
+(function init() {
+  updateAlgoInfo();
+  renderExpenseList();
+  setStatus('Ready — Add expenses or load sample data');
+  setExplanation('Step-by-step comparisons will appear here');
+})();

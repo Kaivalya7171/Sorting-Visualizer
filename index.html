@@ -1,48 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<link rel="stylesheet" href="style.css">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sorting Visualizer</title>
-<meta name="description" content="Interactive sorting visualizer for Merge and Quick sort.">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Expense Organizer — DAA Project</title>
+  <meta name="description" content="Smart Expense Organizer demonstrating Merge Sort and Quick Sort on real expense data.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-<script src="script.js" defer></script>
 
+  <!-- ── Header ── -->
   <header>
     <div class="logo-container">
-      <div class="logo">Sort<span>Viz</span></div>
-      <div class="badge">Visualizer v2.1</div>
-      <button id="sound-toggle" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin-left: 1rem; width: auto; border-radius: 999px;">🔊 Sound: ON</button>
+      <div class="logo">Expense<span>Sorter</span></div>
+      <div class="badge">DAA Project</div>
+    </div>
+    <div class="header-right">
+      <div class="badge badge-algo" id="header-algo-badge">Merge Sort</div>
+      <button id="step-toggle" class="btn btn-sm btn-secondary">
+        <span class="step-icon">👁</span> Step-by-Step: <span id="step-label">ON</span>
+      </button>
     </div>
   </header>
 
   <div class="main-container">
-    
-    <!-- ═══ Sidebar / Controls ═══ -->
+
+    <!-- ══ Sidebar ══ -->
     <aside class="sidebar">
+
+      <!-- Input -->
       <div class="panel">
-        
+        <div class="panel-title">📥 Input Expenses</div>
+
         <div class="control-group">
-          <label>Algorithm</label>
-          <select id="algo-select">
-            <option value="merge">Merge Sort</option>
-            <option value="quick">Quick Sort</option>
-          </select>
+          <label>Add Expense</label>
+          <div class="input-row">
+            <input type="text"   id="inp-category" placeholder="Category (e.g. Food)" maxlength="20" autocomplete="off">
+            <input type="number" id="inp-amount"   placeholder="Amount" min="1" max="99999">
+          </div>
+          <button class="btn btn-primary" id="add-btn">+ Add Expense</button>
         </div>
 
         <div class="control-group">
-          <label>Array Size</label>
-          <div class="range-wrapper">
-            <input type="range" id="size-slider" min="10" max="100" value="40">
-            <span class="range-value" id="size-val">40</span>
+          <label>Or Upload CSV / Excel</label>
+          <label class="file-drop" id="file-drop-area">
+            <span id="file-drop-label">📂 Drop CSV or click to browse</span>
+            <input type="file" id="csv-file" accept=".csv,.xlsx" hidden>
+          </label>
+          <div class="help-text">Upload .csv or .xlsx — columns: Category, Amount</div>
+        </div>
+
+        <div class="control-group">
+          <div class="expense-list-header">
+            <label>Expense List <span id="expense-count" class="count-badge">0</span></label>
+            <button class="btn btn-xs btn-danger-outline" id="clear-all-btn">Clear All</button>
+          </div>
+          <div id="expense-list" class="expense-list">
+            <div class="empty-state">No expenses yet. Add some above!</div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary" id="sample-btn">📋 Load Sample Expenses</button>
+      </div>
+
+      <!-- Algorithm Controls -->
+      <div class="panel">
+        <div class="panel-title">⚙️ Algorithm Controls</div>
+
+        <div class="control-group">
+          <label>Algorithm</label>
+          <div class="algo-toggle" id="algo-toggle">
+            <button class="algo-btn active" data-algo="merge">Merge Sort</button>
+            <button class="algo-btn"        data-algo="quick">Quick Sort</button>
           </div>
         </div>
 
         <div class="control-group">
-          <label>Speed</label>
+          <label>Direction</label>
+          <div class="algo-toggle" id="dir-toggle">
+            <button class="algo-btn active" data-dir="asc">↑ Asc</button>
+            <button class="algo-btn"        data-dir="desc">↓ Desc</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label>Animation Speed</label>
           <div class="range-wrapper">
             <input type="range" id="speed-slider" min="1" max="10" value="5">
             <span class="range-value" id="speed-val">5</span>
@@ -50,97 +93,122 @@
         </div>
 
         <div class="button-group">
-          <button class="btn btn-secondary" id="gen-btn">Generate Array</button>
-          <button class="btn btn-secondary" id="worst-case-btn">Generate Worst Case</button>
-          <div style="display:flex; gap:0.5rem; width:100%;">
-            <button class="btn btn-primary" id="sort-btn" style="flex:1;">Start Sorting</button>
-            <button class="btn btn-secondary" id="pause-btn" style="flex:1; display:none;">Pause</button>
-          </div>
-          <button class="btn btn-danger" id="stop-btn">Stop</button>
+          <button class="btn btn-primary"   id="sort-btn">▶ Sort Expenses</button>
+          <button class="btn btn-secondary" id="compare-btn">⚡ Compare Algorithms</button>
+          <button class="btn btn-danger"    id="stop-btn" style="display:none;">■ Stop</button>
         </div>
-
       </div>
 
+      <!-- Algorithm Info -->
+      <div class="panel algo-info-panel">
+        <div class="panel-title" id="info-title">Merge Sort Info</div>
+        <div id="info-content" class="info-content">
+          <div class="info-row"><span class="info-key">Type</span>   <span class="info-val">Divide &amp; Conquer</span></div>
+          <div class="info-row"><span class="info-key">Stable</span> <span class="info-val">✓ Yes</span></div>
+          <div class="info-row"><span class="info-key">Best</span>   <span class="info-val mono">O(n log n)</span></div>
+          <div class="info-row"><span class="info-key">Average</span><span class="info-val mono">O(n log n)</span></div>
+          <div class="info-row"><span class="info-key">Worst</span>  <span class="info-val mono">O(n log n)</span></div>
+          <div class="info-row"><span class="info-key">Space</span>  <span class="info-val mono">O(n)</span></div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ══ Main Content ══ -->
+    <main class="content">
+
+      <!-- Status -->
+      <div class="status-bar">
+        <div class="status">
+          <div class="status-dot" id="status-dot"></div>
+          <div class="status-msg" id="status-text">Ready — Add expenses and click Sort</div>
+        </div>
+        <div id="step-explanation" class="step-explanation">Step-by-step comparisons will appear here</div>
+      </div>
+
+      <!-- Stats -->
       <div class="stats-grid">
         <div class="stat-box">
-          <div class="stat-val" id="steps">0</div>
-          <div class="stat-lbl">Steps</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="comparisons">0</div>
+          <div class="stat-val" id="stat-comparisons">0</div>
           <div class="stat-lbl">Comparisons</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" id="swaps">0</div>
-          <div class="stat-lbl">Swaps</div>
+          <div class="stat-val" id="stat-swaps">0</div>
+          <div class="stat-lbl">Swaps / Moves</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" id="time-ms">0ms</div>
-          <div class="stat-lbl">Time</div>
+          <div class="stat-val" id="stat-time">0ms</div>
+          <div class="stat-lbl">Time Taken</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="stat-n">0</div>
+          <div class="stat-lbl">Expenses (n)</div>
         </div>
       </div>
 
-      <div class="panel" style="padding: 1.25rem;">
-        <h3 id="info-title" style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">Merge Sort</h3>
-        <ul id="info-list" style="font-size: 0.75rem; color: var(--text-secondary); padding-left: 1.2rem; line-height: 1.8; font-family: var(--font-mono);">
-          <li>Divide & Conquer</li>
-          <li>Stable</li>
-          <li>Uses extra space</li>
-        </ul>
-      </div>
-    </aside>
-
-    <!-- ═══ Main Content / Visualizer ═══ -->
-    <main class="content">
+      <!-- Visualization -->
       <div class="visualizer-card">
-        
         <div class="visualizer-header">
-          <div class="status">
-            <div class="status-dot" id="status-dot"></div>
-            <div class="status-msg" id="status-text">Ready — Generate an array to begin</div>
-          </div>
-          
+          <div class="viz-title">📊 Expense Visualization</div>
           <div class="legend">
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-default)"></div> Unsorted</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-active)"></div> Active</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-compare)"></div> Comparing</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-pivot)"></div> Pivot</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--bar-sorted)"></div> Sorted</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-default)"></div>Unsorted</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-active)"></div>Active</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-compare)"></div>Comparing</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-pivot)"></div>Pivot</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--bar-sorted)"></div>Sorted</div>
           </div>
         </div>
-
-        <div id="explanation" style="margin-top:0.5rem; margin-bottom:0.5rem; font-size:0.8rem; color:var(--text-secondary); font-family:var(--font-mono); text-align:center; min-height:1.2rem;">
-          Explanation will appear here...
+        <div class="bars-wrapper" id="bar-container">
+          <div class="bars-empty-state">Add expenses to visualize sorting</div>
         </div>
-
-        <div class="bars-wrapper" id="bar-container"></div>
-
-        <div class="footer">
-          <div class="footer-links" style="flex-direction:column; gap:0.25rem;">
-            <span>Merge: O(n log n)</span>
-            <span>Quick: Avg O(n log n), <span style="color:var(--text-primary)">Worst O(n²)</span></span>
-          </div>
-          <span id="array-info" style="font-family: var(--font-mono); text-align:right;">—</span>
-        </div>
-
-        <div class="performance-graph" id="perf-graph">
-          <div class="perf-title">Performance Comparison (Time taken)</div>
-          <div class="perf-bars">
-            <div class="perf-col">
-              <div class="perf-val" id="perf-merge-val">—</div>
-              <div class="perf-bar-container"><div class="perf-bar merge" id="perf-merge-bar"></div></div>
-              <div class="perf-lbl">Merge</div>
-            </div>
-            <div class="perf-col">
-              <div class="perf-val" id="perf-quick-val">—</div>
-              <div class="perf-bar-container"><div class="perf-bar quick" id="perf-quick-bar"></div></div>
-              <div class="perf-lbl">Quick</div>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+      <!-- Results / Performance / Insights -->
+      <div class="bottom-grid">
+
+        <div class="panel result-panel">
+          <div class="panel-title">📋 Sorted Results</div>
+          <div id="sorted-results" class="sorted-results">
+            <div class="empty-state">Results will appear after sorting</div>
+          </div>
+        </div>
+
+        <div class="panel perf-panel">
+          <div class="panel-title">⚡ Performance Comparison</div>
+          <div class="perf-bars-section" id="perf-section">
+            <div class="perf-col">
+              <div class="perf-val"  id="perf-merge-val">—</div>
+              <div class="perf-stat" id="perf-merge-cmp">— cmps</div>
+              <div class="perf-bar-outer">
+                <div class="perf-bar merge" id="perf-merge-bar" style="height:0%"></div>
+              </div>
+              <div class="perf-lbl">Merge Sort</div>
+            </div>
+            <div class="perf-col">
+              <div class="perf-val"  id="perf-quick-val">—</div>
+              <div class="perf-stat" id="perf-quick-cmp">— cmps</div>
+              <div class="perf-bar-outer">
+                <div class="perf-bar quick" id="perf-quick-bar" style="height:0%"></div>
+              </div>
+              <div class="perf-lbl">Quick Sort</div>
+            </div>
+          </div>
+          <div class="perf-verdict" id="perf-verdict">Run "Compare Algorithms" to see results</div>
+        </div>
+
+        <div class="panel insight-panel">
+          <div class="panel-title">💡 Spending Insights</div>
+          <div id="insights-list" class="insights-list">
+            <div class="empty-state">Insights will appear after sorting</div>
+          </div>
+        </div>
+
+      </div><!-- /.bottom-grid -->
+
     </main>
 
-  </div>
-  </body>
+  </div><!-- /.main-container -->
+
+  <script src="script.js" defer></script>
+</body>
+</html>
